@@ -51,12 +51,23 @@ const Toasts = React.lazy(() => import('./views/notifications/toasts/Toasts'))
 
 const Widgets = React.lazy(() => import('./views/widgets/Widgets'))
 
+// Products
+const CreateProduct = React.lazy(() => import('./views/product/CreateProduct'))
+const EditProduct = React.lazy(() => import('./views/product/EditProduct'))
+const ProductsList = React.lazy(() => import('./views/product/ProductsList'))
+const ProductDetail = React.lazy(() => import('./views/product/ProductDetail'))
+
 const routes = [
   { path: '/', exact: true, name: 'Home' },
   { path: '/dashboard', name: 'Dashboard', element: Dashboard },
   { path: '/theme', name: 'Theme', element: Colors, exact: true },
   { path: '/theme/colors', name: 'Colors', element: Colors },
   { path: '/theme/typography', name: 'Typography', element: Typography },
+
+  { path: '/product', name: 'ProductsList', element: ProductsList, exact: true },
+  { path: '/product/create-product', name: 'CreateProduct', element: CreateProduct },
+  { path: '/product/products', name: 'ProductsList', element: ProductsList },
+  { path: '/product/product-details', name: 'ProductDetail', element: ProductDetail },
   { path: '/base', name: 'Base', element: Cards, exact: true },
   { path: '/base/accordion', name: 'Accordion', element: Accordion },
   { path: '/base/breadcrumbs', name: 'Breadcrumbs', element: Breadcrumbs },
