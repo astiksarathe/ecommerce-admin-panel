@@ -67,17 +67,27 @@ const CreateProduct = () => {
   })
   const [allVariant, setAllVariant] = useState([])
   const [currentVariant, setCurrentVariant] = useState({})
+  const [vendorList, setVendorList] = useState([])
   const onEditorStateChange = (newEditorState) => {
     const contentState = newEditorState.getCurrentContent()
     setEditorState(newEditorState)
   }
   const onSubmitHandler = () => {
+    console.log({ ...productForm, variants, description: editorState })
     axios
       .post('http://localhost:8000/api/v1/product', {
-        body: { ...productForm, variants, description: editorState },
+        body: { ...productForm, variants: allVariant, description: editorState },
       })
       .then((res) => console.log(res))
       .catch((err) => console.log(err))
+  }
+
+  const checkboxHandler = (e) => {
+    const { checked, name } = e.target
+    setProductForm((pre) => ({
+      ...pre,
+      [name]: checked,
+    }))
   }
 
   const addVariantOption = () => {
@@ -190,6 +200,12 @@ const CreateProduct = () => {
   const openVariantModel = () => {
     setVariantModelVisible(true)
   }
+  useEffect(() => {
+    axios
+      .get('http://localhost:8000/api/v1/vendor')
+      .then((res) => setVendorList(res.data.data))
+      .catch((err) => console.log(err))
+  }, [])
   useEffect(() => {
     const updateVariantList = () => {
       const updatedList = allVariant.map((variant) => {
@@ -357,13 +373,21 @@ const CreateProduct = () => {
               </div>
               <div className="mb-3">
                 <CFormLabel htmlFor="vendor">Vendor</CFormLabel>
-                <CFormInput
-                  type="text"
-                  onChange={handleInputChange}
-                  name="vendor"
-                  value={productForm.vendor}
+
+                <CFormSelect
                   id="vendor"
-                />
+                  value={productForm.vendor}
+                  aria-label="Select Vendor"
+                  name="vendor"
+                  onChange={handleInputChange}
+                >
+                  <option value={null}>Select Vendor</option>
+                  {vendorList.map((vendor) => (
+                    <React.Fragment key={vendor._id}>
+                      <option value={vendor._id}>{vendor.vendorName}</option>
+                    </React.Fragment>
+                  ))}
+                </CFormSelect>
               </div>
               <div className="mb-3">
                 <CFormLabel htmlFor="collection">Collection</CFormLabel>
@@ -605,7 +629,7 @@ const CreateProduct = () => {
               <div className="mb-3">
                 <CFormCheck
                   checked={productForm.taxIncluded}
-                  onChange={handleInputChange}
+                  onChange={checkboxHandler}
                   name="taxIncluded"
                   id="taxIncluded"
                   label="Tax Included"
@@ -614,7 +638,7 @@ const CreateProduct = () => {
               <div className="mb-3">
                 <CFormCheck
                   checked={productForm.isReturnAvailable}
-                  onChange={handleInputChange}
+                  onChange={checkboxHandler}
                   name="isReturnAvailable"
                   id="isReturnAvailable"
                   label="Return available"
@@ -623,7 +647,7 @@ const CreateProduct = () => {
               <div className="mb-3">
                 <CFormCheck
                   checked={productForm.isReplaceable}
-                  onChange={handleInputChange}
+                  onChange={checkboxHandler}
                   name="isReplaceable"
                   id="isReplaceable"
                   label="Exchange/Replace available"
@@ -632,7 +656,7 @@ const CreateProduct = () => {
               <div className="mb-3">
                 <CFormCheck
                   checked={productForm.CODAvailable}
-                  onChange={handleInputChange}
+                  onChange={checkboxHandler}
                   name="CODAvailable"
                   id="CODAvailable"
                   label="Cash on Delivery Available"
@@ -641,7 +665,7 @@ const CreateProduct = () => {
               <div className="mb-3">
                 <CFormCheck
                   checked={productForm.preOrderBookingAvailable}
-                  onChange={handleInputChange}
+                  onChange={checkboxHandler}
                   name="preOrderBookingAvailable"
                   id="preOrderBookingAvailable"
                   label="Pre Order Booking  available"
