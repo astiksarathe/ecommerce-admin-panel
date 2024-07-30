@@ -22,23 +22,28 @@ import { getOptionCombinations } from './product.helper'
 import axios from 'axios'
 import { Link } from 'react-router-dom'
 import VariantModal from './VariantModal'
-
+import Multiselect from 'multiselect-react-dropdown'
+import TreeMultiSelect from './TreeMultiSelect/TreeMultiSelect'
+import { Select } from 'antd'
 const CreateProduct = () => {
   const [editorState, setEditorState] = useState(() => EditorState.createEmpty())
+  const [shortDescription, setShortDescription] = useState(() => EditorState.createEmpty())
   const [variants, setVariants] = useState([])
   const [variantModelVisible, setVariantModelVisible] = useState(false)
   const [productForm, setProductForm] = useState({
     SKU: '',
     title: '',
     description: '',
-    specification: [{ key: '', value: '' }],
-    category: '',
+    shortDescription: '',
+    specification: [],
+    fields: [],
+    category: [],
     productType: '',
     vendor: [''],
     variantAvailable: false,
     inventory: '',
     thumbnilImg: '',
-    images: [{ url: '', alt: '' }],
+    images: [],
     price: {
       MRP: 0,
       currencyCode: 'INR',
@@ -47,36 +52,53 @@ const CreateProduct = () => {
       minPrice: 0,
       maxPrice: 0,
     },
-    tags: [''],
+    tags: [],
     dimensions: {
       length: 0,
       width: 0,
       height: 0,
-      unit: '',
+      unit: 'CM',
     },
     weight: 0,
-    weightUnit: '',
+    weightUnit: 'GRAM',
     taxIncluded: false,
     isReturnAvailable: false,
     isReplaceable: false,
     warrantyInMonths: 0,
     CODAvailable: false,
     preOrderBookingAvailable: false,
-    FAQ: [{ question: '', answer: '' }],
+    FAQ: [],
     status: 'DRAFT',
   })
   const [allVariant, setAllVariant] = useState([])
   const [currentVariant, setCurrentVariant] = useState({})
   const [vendorList, setVendorList] = useState([])
+  const [categories, setCategories] = useState([])
+  const [tags, setTags] = useState([])
   const onEditorStateChange = (newEditorState) => {
-    const contentState = newEditorState.getCurrentContent()
     setEditorState(newEditorState)
   }
+
+  const addCustomField = () => {
+    const field = {
+      fieldType: '',
+      fieldName: '',
+      fieldPlaceholder: '',
+      fieldLabel: '',
+      minLength: 0,
+      maxLength: 0,
+      isRequired: false,
+    }
+    setProductForm((pre) => ({ ...pre, fields: [...pre.fields, field] }))
+  }
   const onSubmitHandler = () => {
-    console.log({ ...productForm, variants, description: editorState })
+    const description = convertToRaw(editorState.getCurrentContent())
     axios
       .post('http://localhost:8000/api/v1/product', {
-        body: { ...productForm, variants: allVariant, description: editorState },
+        ...productForm,
+        description,
+        shortDescription,
+        variants: allVariant,
       })
       .then((res) => console.log(res))
       .catch((err) => console.log(err))
@@ -130,7 +152,6 @@ const CreateProduct = () => {
   const handleInputChange = (e) => {
     const { name, value } = e.target
     const keys = name.split('.')
-
     if (keys.length === 2) {
       setProductForm({
         ...productForm,
@@ -203,7 +224,37 @@ const CreateProduct = () => {
   useEffect(() => {
     axios
       .get('http://localhost:8000/api/v1/vendor')
-      .then((res) => setVendorList(res.data.data))
+      .then((res) => {
+        const list = res.data.data.map((vendor) => ({ name: vendor.vendorName, id: vendor._id }))
+        setVendorList(list)
+      })
+      .catch((err) => console.log(err))
+    axios
+      .get('http://localhost:8000/api/v1/category/root')
+      .then((res) => {
+        const list = res.data.data.map((category) => ({
+          title: category.categoryName,
+          value: category.categoryID,
+          id: category.categoryID,
+          pId: 0,
+          key: category.categoryID,
+          isLeaf: category.isLeaf,
+        }))
+        setCategories(list)
+      })
+      .catch((err) => console.log(err))
+    axios
+      .get('http://localhost:8000/api/v1/list/tags')
+      .then((res) => {
+        const list = res.data.data[0].value
+          .map((name, ind) => ({
+            value: name,
+            label: name,
+            key: ind,
+          }))
+          .filter(({ value }) => value !== null)
+        setTags(list)
+      })
       .catch((err) => console.log(err))
   }, [])
   useEffect(() => {
@@ -218,6 +269,27 @@ const CreateProduct = () => {
     }
     updateVariantList()
   }, [currentVariant])
+
+  const getSubCategories = ({ id }) => {
+    return new Promise((resolve, reject) => {
+      axios
+        .get(`http://localhost:8000/api/v1/category/child/${id}`)
+        .then((res) => {
+          const list = res.data.data.map((category) => ({
+            title: category.categoryName,
+            value: category.categoryID,
+            id: category.categoryID,
+            pId: id,
+            key: category.categoryID,
+            children: category.childCategories,
+            isLeaf: category.isLeaf,
+          }))
+          setCategories(categories.concat(list))
+          resolve()
+        })
+        .catch((err) => reject(err))
+    })
+  }
   const variantDetailChangeHandler = (e) => {
     const { name, value } = e.target
     const keys = name.split('.')
@@ -235,6 +307,52 @@ const CreateProduct = () => {
         [name]: value,
       })
     }
+  }
+
+  function changeHandlerForMultiSelect(selectedList, name) {
+    console.log(selectedList)
+    if (name === 'vendor') {
+      setProductForm((pre) => {
+        return { ...pre, vendor: selectedList }
+      })
+    }
+    if (name === 'category') {
+      setProductForm((pre) => {
+        return { ...pre, category: selectedList }
+      })
+    }
+  }
+
+  const changeCategory = (list) => {
+    setProductForm((pre) => ({ ...pre, category: list }))
+  }
+
+  const tagHandler = (value) => {
+    console.log(value)
+    setProductForm((pre) => ({ ...pre, tags: value }))
+  }
+  const deleteCustomField = (ind) => {
+    const newFields = productForm.fields.filter((_, specIndex) => ind !== specIndex)
+    setProductForm({ ...productForm, fields: newFields })
+  }
+  const onChangeCustomField = (index, name, event) => {
+    let val = event
+    if (typeof event !== 'string') {
+      val = event.target.value
+    }
+    if (name === 'minLength' || name === 'maxLength' || name === 'isRequired') {
+      val = parseInt(val)
+    }
+    const updatedState = productForm.fields.map((field, ind) => {
+      if (ind === index) {
+        return {
+          ...productForm.fields[index],
+          [name]: val,
+        }
+      }
+      return field
+    })
+    setProductForm((pre) => ({ ...pre, fields: updatedState }))
   }
   return (
     <CRow>
@@ -269,6 +387,20 @@ const CreateProduct = () => {
                   onChange={handleInputChange}
                   id="product-title"
                   placeholder="Short sleeve t-shirt"
+                />
+              </div>
+              <div className="mb-3">
+                <CFormLabel htmlFor="product-shortdescription">Short Description</CFormLabel>
+                <Editor
+                  name="description"
+                  value={productForm.shortDescription}
+                  editorState={shortDescription}
+                  onEditorStateChange={(v) => {
+                    setShortDescription(v)
+                  }}
+                  wrapperClassName="wrapper-class"
+                  editorClassName="editor-class"
+                  toolbarClassName="toolbar-class"
                 />
               </div>
               <div className="mb-3">
@@ -343,23 +475,134 @@ const CreateProduct = () => {
       </CCol>
       <CCol xs={12}>
         <CCard className="mb-4">
+          <CCardHeader>Custom Fields</CCardHeader>
+          <CCardBody>
+            {productForm.fields.map((field, index) => (
+              <CRow
+                className={index == 0 ? 'mt-2' : 'mt-5'}
+                key={index}
+                style={{ borderTop: '1px solid gray' }}
+              >
+                <CCol sm={11} lg={4} xs={11} md={4}>
+                  <CFormLabel htmlFor="field-type">Field Type</CFormLabel>
+                  <Select
+                    name="fieldType"
+                    value={field.fieldType}
+                    onChange={(e) => {
+                      onChangeCustomField(index, 'fieldType', e)
+                    }}
+                    // value={spec.fieldType}
+                    type="text"
+                    id="field-type"
+                    style={{
+                      width: '100%',
+                    }}
+                    options={[
+                      { value: 'IMAGE', label: 'Image', key: 1 },
+                      { value: 'INPUT', label: 'Input', key: 2 },
+                    ]}
+                  />
+                </CCol>
+                <CCol sm={11} lg={4} xs={11} md={4}>
+                  <CFormLabel>Name Attribute</CFormLabel>
+                  <CFormInput
+                    type="text"
+                    placeholder="Name Attribute"
+                    value={field.fieldName}
+                    onChange={(e) => {
+                      onChangeCustomField(index, 'fieldName', e)
+                    }}
+                  />
+                </CCol>
+                <CCol sm={11} lg={4} xs={11} md={4}>
+                  <CFormLabel>Field Placeholder</CFormLabel>
+                  <CFormInput
+                    type="text"
+                    placeholder="Field Placeholder"
+                    value={field.fieldPlaceholder}
+                    onChange={(e) => {
+                      onChangeCustomField(index, 'fieldPlaceholder', e)
+                    }}
+                  />
+                </CCol>
+                <CCol sm={11} lg={4} xs={11} md={4}>
+                  <CFormLabel>Field Label</CFormLabel>
+                  <CFormInput
+                    type="text"
+                    placeholder="Field Label"
+                    value={field.fieldLabel}
+                    onChange={(e) => {
+                      onChangeCustomField(index, 'fieldLabel', e)
+                    }}
+                  />
+                </CCol>
+                <CCol sm={11} lg={4} xs={11} md={4}>
+                  <CFormLabel>Min Length Validation</CFormLabel>
+                  <CFormInput
+                    type="number"
+                    placeholder="Min Length Validation"
+                    value={field.minLength}
+                    onChange={(e) => {
+                      onChangeCustomField(index, 'minLength', e)
+                    }}
+                  />
+                </CCol>
+                <CCol sm={11} lg={4} xs={11} md={4}>
+                  <CFormLabel>Max Length Validation</CFormLabel>
+                  <CFormInput
+                    type="number"
+                    placeholder="Max Length Validation"
+                    value={field.maxLength}
+                    onChange={(e) => {
+                      onChangeCustomField(index, 'maxLength', e)
+                    }}
+                  />
+                </CCol>
+                <CCol sm={11} lg={4} xs={11} md={4}>
+                  <CFormLabel htmlFor="field-type">Required Validation</CFormLabel>
+                  <Select
+                    name="isRequired"
+                    onChange={(e) => {
+                      onChangeCustomField(index, 'isRequired', e)
+                    }}
+                    type="text"
+                    id="field-type"
+                    style={{
+                      width: '100%',
+                    }}
+                    value={field.isRequired}
+                    options={[
+                      { value: 1, label: 'True', key: 1 },
+                      { value: 0, label: 'False', key: 2 },
+                    ]}
+                  />
+                </CCol>
+                <CCol sm={4} lg={2} xs={4} md={2}>
+                  <CButton type="button" color="danger" onClick={() => deleteCustomField(index)}>
+                    Remove
+                  </CButton>
+                </CCol>
+              </CRow>
+            ))}
+            <CButton className="mt-2" type="button" onClick={addCustomField} color="primary">
+              Add Custom Field
+            </CButton>
+          </CCardBody>
+        </CCard>
+      </CCol>
+      <CCol xs={12}>
+        <CCard className="mb-4">
           <CCardHeader>Product Organization</CCardHeader>
           <CCardBody>
             <CRow>
               <div className="mb-3">
                 <CFormLabel htmlFor="category">Category</CFormLabel>
-                <CFormSelect
-                  id="category"
-                  aria-label="Select Category"
-                  name="category"
-                  onChange={handleInputChange}
+                <TreeMultiSelect
+                  treeData={categories}
+                  onLoadData={getSubCategories}
+                  changeCategory={changeCategory}
                   value={productForm.category}
-                >
-                  <option>Open this select menu</option>
-                  <option value="1">One</option>
-                  <option value="2">Two</option>
-                  <option value="3">Three</option>
-                </CFormSelect>
+                />
               </div>
               <div className="mb-3">
                 <CFormLabel htmlFor="product-type">Product Type</CFormLabel>
@@ -373,39 +616,30 @@ const CreateProduct = () => {
               </div>
               <div className="mb-3">
                 <CFormLabel htmlFor="vendor">Vendor</CFormLabel>
-
-                <CFormSelect
+                <Multiselect
                   id="vendor"
                   value={productForm.vendor}
                   aria-label="Select Vendor"
                   name="vendor"
-                  onChange={handleInputChange}
-                >
-                  <option value={null}>Select Vendor</option>
-                  {vendorList.map((vendor) => (
-                    <React.Fragment key={vendor._id}>
-                      <option value={vendor._id}>{vendor.vendorName}</option>
-                    </React.Fragment>
-                  ))}
-                </CFormSelect>
-              </div>
-              <div className="mb-3">
-                <CFormLabel htmlFor="collection">Collection</CFormLabel>
-                <CFormSelect id="collection" aria-label="Select Collection">
-                  <option>Open this select menu</option>
-                  <option value="1">One</option>
-                  <option value="2">Two</option>
-                  <option value="3">Three</option>
-                </CFormSelect>
+                  options={vendorList}
+                  onSelect={(selectedList) => changeHandlerForMultiSelect(selectedList, 'vendor')} // Function will trigger on select event
+                  onRemove={(selectedList) => changeHandlerForMultiSelect(selectedList, 'vendor')} // Function will trigger on remove event
+                  displayValue="name" // Property name to display in the dropdown options
+                />
               </div>
               <div className="mb-3">
                 <CFormLabel htmlFor="product-tag">Product Tag</CFormLabel>
-                <CFormInput
+                <Select
                   name="tags"
-                  onChange={handleInputChange}
+                  onChange={tagHandler}
                   value={productForm.tags}
                   type="text"
                   id="product-tag"
+                  mode="tags"
+                  style={{
+                    width: '100%',
+                  }}
+                  options={tags}
                 />
               </div>
             </CRow>
